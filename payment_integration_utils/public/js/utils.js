@@ -22,7 +22,6 @@ Object.assign(payment_integration_utils, {
 	can_user_authorize_payment() {
 		return (
 			frappe.session.user !== "Administrator" &&
-			!frappe.boot.user.impersonated_by &&
 			frappe.user.has_role(PAYMENT_AUTHORIZER) &&
 			frappe.perm.has_perm("Payment Entry", 0, "submit")
 		);
