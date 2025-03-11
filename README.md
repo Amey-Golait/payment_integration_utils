@@ -13,7 +13,9 @@ This app provides core utilities to build bank integrations in ERPNext. It inclu
 - **Reusable Workflows**: Ready-to-use workflows for bank payments.  
 - **Custom Fields**: Flexible fields to support various integration needs.  
 - **Utilities**: Tools to streamline online payment processes.  
-- **Bulk Payments Action**: Efficiently handle bulk payments.  
+- **Bulk Payments Action**: Efficiently handle bulk payments.
+
+**Note:** Currently only **INR** (Indian Rupee 🇮🇳) currency payments are supported.
 
 ## 📦 Installation
 
