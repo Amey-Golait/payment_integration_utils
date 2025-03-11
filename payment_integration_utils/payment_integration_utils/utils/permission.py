@@ -29,6 +29,16 @@ def has_payment_permissions(payment_entries: str | list[str], throw: bool = Fals
 
         return False
 
+    if frappe.session.data.get("impersonated_by"):
+        if throw:
+            frappe.throw(
+                msg=_("Impersonated user can't authorize the payment."),
+                title=_("Permission Error"),
+                exc=frappe.PermissionError,
+            )
+
+        return False
+
     authorizer_role = has_payment_authorizer_role(throw=throw)
     permission = has_payment_entry_permission(payment_entries, throw=throw)
 
