@@ -163,15 +163,21 @@ def reset_otp_secret(user: str):
 
 ##### Utilities #####
 def run_before_payment_authentication(
-    payment_entries: str | list[str], throw: bool = False
+    payment_entries: str | list[str],
+    throw: bool = False,
+    ignore_impersonation: bool = False,
 ) -> bool:
     """
     Run `before_payment_authentication` hooks before sending OTP.
 
     :param payment_entries: List of payment entry names.
+    :param throw: If `True`, throws `PermissionError` if user doesn't have access.
+    :param ignore_impersonation: If `True`, ignores impersonation checks.
     """
     for fn in frappe.get_hooks("before_payment_authentication"):
-        if not frappe.get_attr(fn)(payment_entries, throw=throw):
+        if not frappe.get_attr(fn)(
+            payment_entries, throw=throw, ignore_impersonation=ignore_impersonation
+        ):
             return False
 
     return True
