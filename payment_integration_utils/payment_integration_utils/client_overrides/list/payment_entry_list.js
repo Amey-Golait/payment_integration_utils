@@ -99,7 +99,7 @@ function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_d
 			{
 				fieldname: "eligible_doc_count_html",
 				fieldtype: "HTML",
-				options: `<p>✅ ${__("Marked for online payment: {0}", [marked_docs.length])} </p>`,
+				options: `<p> ${__("Ready to make online payment: {0}", [marked_docs.length])} </p>`,
 				depends_on: `eval: ${marked_docs.length} && ${unmarked_docs.length}`,
 			},
 			{
@@ -173,6 +173,7 @@ function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_d
 
 	dialog.show();
 }
+
 function get_formlink(docname) {
 	return `<a target="_blank" href="${frappe.utils.get_form_link("Payment Entry", docname)}">${docname}</a>`;
 }
