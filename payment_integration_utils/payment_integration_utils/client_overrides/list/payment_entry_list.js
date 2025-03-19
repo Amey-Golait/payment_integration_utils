@@ -24,10 +24,11 @@ frappe.listview_settings["Payment Entry"] = {
 
 			selected_docs.forEach((doc) => {
 				if (can_make_payment(doc)) {
-					if (doc.make_bank_online_payment) marked_docs.push(doc.name);
-					else unmarked_docs.push(doc.name);
+					if (doc.make_bank_online_payment) marked_docs.push(doc);
+					else unmarked_docs.push(doc);
 				} else {
-					ineligible_docs.push({ name: doc.name, reason: get_ineligibility_reason(doc) });
+					doc["reason"] = get_ineligibility_reason(doc);
+					ineligible_docs.push(doc);
 				}
 			});
 
@@ -94,6 +95,9 @@ function is_party_bank_account_missing(doc) {
 
 // #### Dialog #### //
 function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_docs) {
+	const marked_paid_amount = get_total_paid_amount(marked_docs);
+	const total_paid_amount = marked_paid_amount + get_total_paid_amount(unmarked_docs);
+
 	const dialog = new frappe.ui.Dialog({
 		title: __("Confirm Payment Entries"),
 		primary_action_label: __("Confirm"),
@@ -122,14 +126,42 @@ function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_d
 				depends_on: `eval: ${unmarked_docs.length}`,
 			},
 			{
+				fieldtype: "Column Break",
+				fieldname: "col_unmarked_docs",
+			},
+			{
 				fieldname: "mark_online_payment",
 				label: __("Mark make online payment"),
 				fieldtype: "Check",
 				default: unmarked_docs.length ? 1 : 0,
 				depends_on: `eval: ${unmarked_docs.length}`,
-				description: `<p class='text-info font-weight-bold'>
-								${__("Note: If unchecked, Unmarked docs will be skipped!")}
+				description: `<p class=''>
+								${__("If unchecked, Unmarked docs will be skipped!")}
 							</p>`,
+				onchange: function () {
+					if (!dialog.get_value("mark_online_payment")) {
+						dialog.set_value("total_amount", marked_paid_amount);
+					} else {
+						dialog.set_value("total_amount", total_paid_amount);
+					}
+				},
+			},
+			{
+				fieldtype: "Section Break",
+				fieldname: "sec_total_amount",
+			},
+			{
+				fieldtype: "Currency",
+				fieldname: "total_amount",
+				label: __("Total Amount to be Paid"),
+				options: "INR",
+				default: total_paid_amount,
+				read_only: 1,
+				bold: 1,
+			},
+			{
+				fieldtype: "Column Break",
+				fieldname: "col_total_amount",
 			},
 			{
 				fieldtype: "Section Break",
@@ -185,7 +217,7 @@ function get_unmarked_docs_html(docs) {
 
 	return `<details open>
 				<summary>${__("Not marked for online payment ({0})", [docs.length])}</summary>
-				<ol>${docs.map((doc) => `<li>${get_formlink(doc)}</li>`).join("")}</ol>
+				<ol>${docs.map((doc) => `<li>${get_formlink(doc.name)}</li>`).join("")}</ol>
 			</details>`;
 }
 
@@ -196,6 +228,10 @@ function get_ineligible_docs_html(docs, summary, open = false) {
 				<summary>${summary}</summary>
 				<ol>${docs.map((doc) => `<li>${get_formlink(doc.name)}: ${doc.reason}</li>`).join("")}</ol>
 			</details>`;
+}
+
+function get_total_paid_amount(docs) {
+	return docs.reduce((total, doc) => total + doc.paid_amount, 0);
 }
 
 // #### API Call #### //
