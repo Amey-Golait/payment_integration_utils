@@ -190,7 +190,7 @@ function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_d
 
 			if (!values.mark_online_payment) unmarked_docs = [];
 
-			const docnames = [...marked_docs, ...unmarked_docs];
+			const docnames = [...marked_docs, ...unmarked_docs].map((doc) => doc.name);
 
 			list_view.disable_list_update = true;
 
