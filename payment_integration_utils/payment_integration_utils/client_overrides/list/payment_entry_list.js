@@ -2,7 +2,15 @@
 // For license information, please see license.txt
 
 frappe.listview_settings["Payment Entry"] = {
-	add_fields: ["make_bank_online_payment", "integration_docname", "integration_doctype"],
+	add_fields: [
+		"make_bank_online_payment",
+		"payment_transfer_method",
+		"integration_docname",
+		"integration_doctype",
+		"party_bank_account",
+		"contact_mobile",
+		"contact_email",
+	],
 
 	onload: function (list_view) {
 		// Add `Pay and Submit` button to the Payment Entry list view
@@ -16,10 +24,11 @@ frappe.listview_settings["Payment Entry"] = {
 
 			selected_docs.forEach((doc) => {
 				if (can_make_payment(doc)) {
-					if (doc.make_bank_online_payment) marked_docs.push(doc.name);
-					else unmarked_docs.push(doc.name);
+					if (doc.make_bank_online_payment) marked_docs.push(doc);
+					else unmarked_docs.push(doc);
 				} else {
-					ineligible_docs.push({ name: doc.name, reason: get_ineligibility_reason(doc) });
+					doc["reason"] = get_ineligibility_reason(doc);
+					ineligible_docs.push(doc);
 				}
 			});
 
@@ -30,8 +39,7 @@ frappe.listview_settings["Payment Entry"] = {
 					message += "<br>";
 					message += get_ineligible_docs_html(
 						ineligible_docs,
-						__("View Ineligible Docs ({0})", [ineligible_docs.length]),
-						false
+						__("View Ineligible Docs ({0})", [ineligible_docs.length])
 					);
 				}
 
@@ -46,35 +54,70 @@ frappe.listview_settings["Payment Entry"] = {
 
 // #### Utils #### //
 function can_make_payment(doc) {
-	return (
-		doc.integration_doctype &&
-		doc.integration_docname &&
-		doc.docstatus === 0 &&
-		doc.payment_type === "Pay"
-	);
+	if (
+		!doc.integration_docname ||
+		!doc.integration_doctype ||
+		doc.docstatus !== 0 ||
+		doc.payment_type !== "Pay"
+	)
+		return false;
+
+	// Payment with Link requires contact details
+	// Payment with NEFT | IMPS | RTGS | UPI  requires party bank account
+	if (is_link_details_missing(doc) || is_party_bank_account_missing(doc)) return false;
+
+	return true;
 }
 
 function get_ineligibility_reason(doc) {
-	if (!doc.integration_doctype || !doc.integration_docname) {
-		return __("Integration missing");
-	} else if (doc.docstatus !== 0) {
-		return __("Not Submittable");
-	} else if (doc.payment_type !== "Pay") {
-		return __("Not Payable");
-	}
+	if (!doc.integration_doctype || !doc.integration_docname) return __("Integration missing");
+
+	if (doc.docstatus !== 0) return __("Not Submittable");
+
+	if (doc.payment_type !== "Pay") return __("Not Payable");
+
+	if (doc.paid_from_account_currency !== "INR") return __("Not INR Transaction");
+
+	if (is_link_details_missing(doc)) return __("Contact Details Missing");
+
+	if (is_party_bank_account_missing(doc)) return __("Party's Bank Account Missing");
+
+	return __("Unknown Reason");
+}
+
+function is_link_details_missing(doc) {
+	return doc.payment_transfer_method === "Link" && !doc.contact_mobile && !doc.contact_email;
+}
+
+function is_party_bank_account_missing(doc) {
+	return ["NEFT", "IMPS", "RTGS", "UPI"].includes(doc.payment_transfer_method) && !doc.party_bank_account;
 }
 
 // #### Dialog #### //
 function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_docs) {
+	const marked_paid_amount = get_total_paid_amount(marked_docs);
+	const total_paid_amount = marked_paid_amount + get_total_paid_amount(unmarked_docs);
+
 	const dialog = new frappe.ui.Dialog({
 		title: __("Confirm Payment Entries"),
 		primary_action_label: __("Confirm"),
 		fields: [
 			{
+				fieldname: "eligible_doc_count_html",
+				fieldtype: "HTML",
+				options: `<p> ${__("Ready to make online payment: {0}", [marked_docs.length])} </p>`,
+				depends_on: `eval: ${marked_docs.length} && ${unmarked_docs.length}`,
+			},
+			{
 				fieldname: "eligible_doc_html",
 				fieldtype: "HTML",
 				options: __("Pay and Submit {0} Documents?", [marked_docs.length]),
 				depends_on: `eval: ${marked_docs.length} && ${!unmarked_docs.length}`,
+			},
+			{
+				fieldtype: "Section Break",
+				fieldname: "sec_unmarked_docs",
+				depends_on: `eval: ${unmarked_docs.length}`,
 			},
 			{
 				fieldname: "unmarked_doc_html",
@@ -83,14 +126,47 @@ function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_d
 				depends_on: `eval: ${unmarked_docs.length}`,
 			},
 			{
+				fieldtype: "Column Break",
+				fieldname: "col_unmarked_docs",
+			},
+			{
 				fieldname: "mark_online_payment",
 				label: __("Mark make online payment"),
 				fieldtype: "Check",
 				default: unmarked_docs.length ? 1 : 0,
 				depends_on: `eval: ${unmarked_docs.length}`,
-				description: `<p class='text-warning font-weight-bold'>
-								${__("If unchecked, above docs will be skipped!")}
+				description: `<p class=''>
+								${__("If unchecked, Unmarked docs will be skipped!")}
 							</p>`,
+				onchange: function () {
+					if (!dialog.get_value("mark_online_payment")) {
+						dialog.set_value("total_amount", marked_paid_amount);
+					} else {
+						dialog.set_value("total_amount", total_paid_amount);
+					}
+				},
+			},
+			{
+				fieldtype: "Section Break",
+				fieldname: "sec_total_amount",
+			},
+			{
+				fieldtype: "Currency",
+				fieldname: "total_amount",
+				label: __("Total Amount to be Paid"),
+				options: "INR",
+				default: total_paid_amount,
+				read_only: 1,
+				bold: 1,
+			},
+			{
+				fieldtype: "Column Break",
+				fieldname: "col_total_amount",
+			},
+			{
+				fieldtype: "Section Break",
+				fieldname: "sec_ineligible_docs",
+				depends_on: `eval: ${ineligible_docs.length}`,
 			},
 			{
 				fieldname: "ineligible_doc_html",
@@ -131,8 +207,9 @@ function show_confirm_dialog(list_view, marked_docs, unmarked_docs, ineligible_d
 
 	dialog.show();
 }
-function get_formlink(doc) {
-	return `<a target="_blank" href="${frappe.utils.get_form_link("Payment Entry", doc)}">${doc}</a>`;
+
+function get_formlink(docname) {
+	return `<a target="_blank" href="${frappe.utils.get_form_link("Payment Entry", docname)}">${docname}</a>`;
 }
 
 function get_unmarked_docs_html(docs) {
@@ -140,17 +217,21 @@ function get_unmarked_docs_html(docs) {
 
 	return `<details open>
 				<summary>${__("Not marked for online payment ({0})", [docs.length])}</summary>
-				<ol>${docs.map((doc) => `<li>${get_formlink(doc)}</li>`).join("")}</ol>
-			</details><br>`;
+				<ol>${docs.map((doc) => `<li>${get_formlink(doc.name)}</li>`).join("")}</ol>
+			</details>`;
 }
 
-function get_ineligible_docs_html(docs, summary, open = true) {
+function get_ineligible_docs_html(docs, summary, open = false) {
 	if (!docs.length) return "";
 
-	return `<br><details ${open ? "open" : ""}>
+	return `<details ${open ? "open" : ""}>
 				<summary>${summary}</summary>
 				<ol>${docs.map((doc) => `<li>${get_formlink(doc.name)}: ${doc.reason}</li>`).join("")}</ol>
 			</details>`;
+}
+
+function get_total_paid_amount(docs) {
+	return docs.reduce((total, doc) => total + doc.paid_amount, 0);
 }
 
 // #### API Call #### //
