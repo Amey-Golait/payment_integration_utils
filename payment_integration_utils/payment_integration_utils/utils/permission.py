@@ -6,16 +6,22 @@ from payment_integration_utils.payment_integration_utils.constants.roles import 
 )
 
 
-def has_payment_permissions(payment_entries: str | list[str], throw: bool = False):
+def has_payment_permissions(
+    payment_entries: str | list[str],
+    throw: bool = False,
+    ignore_impersonation: bool = False,
+) -> bool:
     """
     Check current user has payment permissions or not!
 
     :param payment_entries: Payment Entry name or list of names.
     :param throw: If `True`, throws `PermissionError` if user doesn't have access.
+    :param ignore_impersonation: If `True`, ignores the impersonation check.
 
     ---
     Checks:
     - User has role of payment authorizer.
+    - User is not impersonated.
     - User can read integration documents.
     - User have permissions to submit/cancel the PE.
     """
@@ -23,6 +29,16 @@ def has_payment_permissions(payment_entries: str | list[str], throw: bool = Fals
         if throw:
             frappe.throw(
                 msg=_("Administrator can't authorize the payment."),
+                title=_("Permission Error"),
+                exc=frappe.PermissionError,
+            )
+
+        return False
+
+    if not ignore_impersonation and frappe.session.data.get("impersonated_by"):
+        if throw:
+            frappe.throw(
+                msg=_("Impersonated user can't authorize the payment."),
                 title=_("Permission Error"),
                 exc=frappe.PermissionError,
             )
