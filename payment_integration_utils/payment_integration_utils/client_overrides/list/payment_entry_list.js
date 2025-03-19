@@ -75,6 +75,8 @@ function get_ineligibility_reason(doc) {
 
 	if (doc.payment_type !== "Pay") return __("Not Payable");
 
+	if (doc.paid_from_account_currency !== "INR") return __("Not INR Transaction");
+
 	if (is_link_details_missing(doc)) return __("Contact Details Missing");
 
 	if (is_party_bank_account_missing(doc)) return __("Party's Bank Account Missing");
